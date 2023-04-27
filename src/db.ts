@@ -150,6 +150,16 @@ export async function recipientExists(driver: Driver, address: string): Promise<
   return count;
 }
 
+export async function senderExists(driver: Driver, address: string): Promise<number> {
+  const query = `
+  MATCH (r:Address {address: "${address}"})
+  RETURN COUNT(r) > 0 as senderExists;  
+  `;
+  const result = await runQuery(driver, query);
+  const count = result.records[0].get("senderExists");
+  return count;
+}
+
 export async function numberOfRecipients(driver: Driver, address: string): Promise<string[]> {
   const query = `
   MATCH (a:Address {address: '${address}'})-[:SENT_BY]->(tx:Transaction)-[:RECEIVED_BY]->(r:Recipient)

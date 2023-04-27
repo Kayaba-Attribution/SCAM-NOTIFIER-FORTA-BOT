@@ -32,7 +32,8 @@ import {
   deleteAllData, sharedReportsCount,
   setAddressTypeToNotifier,
   recipientExists,
-  numberOfRecipients
+  numberOfRecipients,
+  senderExists
 } from "./db";
 import { Driver, Result, auth, driver as createDriverInstance } from "neo4j-driver";
 
@@ -65,9 +66,9 @@ function utf8ToHex(utf8String: string) {
   return hexString;
 }
 
-function createTx(from: string, to: string, data: string) {
+function createTx(from: string, to: string, data: string, customHash?: string) {
   const mockTransaction: Transaction = {
-    hash: getRandomTxHash(),
+    hash: customHash || getRandomTxHash(),
     from: from,
     to: to,
     data: utf8ToHex(data),
@@ -300,6 +301,7 @@ describe("SCAM-NOTIFIER-BOT db logic", () => {
     let G1: string;
     let G2: string;
     let S1: string;
+    let S2: string;
 
     beforeAll(async () => {
       initialize = agent.initialize;
@@ -311,6 +313,7 @@ describe("SCAM-NOTIFIER-BOT db logic", () => {
       G1 = getRandomAddress();
       G2 = getRandomAddress();
       S1 = getRandomAddress();
+      S2 = getRandomAddress();
       await initialize(true)
     });
     console.log("Test the transaction data store");
@@ -376,6 +379,40 @@ describe("SCAM-NOTIFIER-BOT db logic", () => {
           }
         ),
       ]);
+    });
+
+    it("Adds a general address when it sends a transaction to a known scam address", async () => {
+      // Notifier sends a transaction to a another scam address
+      await storeTransactionData(
+        neo4jDriver,
+        N1,
+        S2,
+        getRandomTxHash(),
+        "EOA",
+        "Alert THIS IS ALSO A SCAM"
+      );
+
+      const G1_IsNotifier = await checkNotifier(neo4jDriver, G1)
+      expect(G1_IsNotifier).toBe(false);
+
+      const newAlertTx = createTx(
+        G1,
+        S1,
+        "scam honeypot",
+        "custom_hash"
+      )
+
+      const consoleSpy = jest.spyOn(console, "log"); 
+      const newAlert = await handleTransaction(newAlertTx);
+      expect(consoleSpy).toHaveBeenCalledWith("[Success] [Regular] Saved transaction data custom_hash msg: scam honeypot");
+      consoleSpy.mockRestore();
+      console.log("newAlert", newAlert);
+
+      const G1_ExistInDb = await senderExists(neo4jDriver, G1);
+      expect(G1_ExistInDb).toBe(true);
+
+      const G1_IsNotifierAfterAddedToDb = await checkNotifier(neo4jDriver, G1)
+      expect(G1_IsNotifierAfterAddedToDb).toBe(false);
     });
 
 
