@@ -32,7 +32,9 @@
     "disable": "forta-agent disable",
     "enable": "forta-agent enable",
     "keyfile": "forta-agent keyfile",
-    "test": "jest --detectOpenHandles"
+    "test": "jest --detectOpenHandles --testNamePattern='Bot Alerts Test'",
+    "testDB": "jest --detectOpenHandles"
+    
   },
   "dependencies": {
     "dotenv": "^16.0.3",

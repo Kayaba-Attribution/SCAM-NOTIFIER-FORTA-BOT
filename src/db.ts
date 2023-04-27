@@ -2,14 +2,24 @@ import { Driver, Result, auth, driver as createDriverInstance } from "neo4j-driv
 
 
 
-export function createDriver(uri: string, user: string, password: string): Driver {
-  const driver = createDriverInstance(uri, auth.basic(user, password));
+export function createDriver(uri: string, user: string, password: string, flag?: string): Driver {
+  const TEST_DB_URL = 'neo4j+s://bd21e303.databases.neo4j.io';
+  const TEST_DB_USER = 'neo4j';
+  const TEST_DB_PASSWORD = 'PtWAoUygSYLWPDEhjkbjL52FU2k64ZwmsFmdI4Vzuys';
+
+  let driver: Driver;
+  if (flag === 'TEST') {
+    driver = createDriver(TEST_DB_URL, TEST_DB_USER, TEST_DB_PASSWORD);
+  } else{
+    driver = createDriverInstance(uri, auth.basic(user, password));
+  }
 
   if (!driver) {
     console.error('Failed to create a driver.');
   } else {
     console.log('Driver created successfully.');
   }
+
   return driver;
 }
 

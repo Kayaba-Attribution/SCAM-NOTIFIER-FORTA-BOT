@@ -3,11 +3,26 @@ import {
   FindingSeverity,
   Finding,
   HandleTransaction,
+  Initialize,
   createTransactionEvent,
   ethers,
   Transaction,
 } from "forta-agent";
 import agent from "./agent";
+
+interface BotSubscription {
+  botId: string;
+  alertId?: string;
+  alertIds?: string[];
+  chainId?: number;
+}
+interface AlertConfig {
+  subscriptions: BotSubscription[];
+}
+interface InitializeResponse {
+  alertConfig: AlertConfig;
+}
+
 
 import { utils } from 'ethers';
 
@@ -55,7 +70,7 @@ function createTx(from: string, to: string, data: string) {
     hash: getRandomTxHash(),
     from: from,
     to: to,
-    data: data,
+    data: utf8ToHex(data),
     value: "0",
     gasPrice: "0",
     nonce: 0,
@@ -76,10 +91,6 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-const TEST_DB_URL = 'neo4j+s://bd21e303.databases.neo4j.io';
-const TEST_DB_USER = 'neo4j';
-const TEST_DB_PASSWORD = 'PtWAoUygSYLWPDEhjkbjL52FU2k64ZwmsFmdI4Vzuys';
-
 
 describe("SCAM-NOTIFIER-BOT db logic", () => {
   let handleTransaction: HandleTransaction;
@@ -87,7 +98,7 @@ describe("SCAM-NOTIFIER-BOT db logic", () => {
 
   beforeAll(async () => {
     handleTransaction = agent.handleTransaction;
-    neo4jDriver = createDriver(TEST_DB_URL, TEST_DB_USER, TEST_DB_PASSWORD);
+    neo4jDriver = createDriver('', '', '', "TEST");
     const dataDeleted = await deleteAllData(neo4jDriver);
     expect(dataDeleted).toBe(true);
   });
@@ -275,10 +286,104 @@ describe("SCAM-NOTIFIER-BOT db logic", () => {
     //   );
     // });
 
+    // Close the driver after all tests have been completed
+    afterAll(() => {
+      neo4jDriver.close();
+    });
   });
 
-  // Close the driver after all tests have been completed
-  afterAll(() => {
-    neo4jDriver.close();
+  describe("Bot Alerts Test", () => {
+    type Initialize = (test?: boolean) => Promise<InitializeResponse | void>;
+    let initialize: Initialize;
+    let handleTransaction: HandleTransaction;
+    let N1: string;
+    let G1: string;
+    let G2: string;
+    let S1: string;
+
+    beforeAll(async () => {
+      initialize = agent.initialize;
+      handleTransaction = agent.handleTransaction;
+      neo4jDriver = createDriver('', '', '', "TEST");
+      const dataDeleted = await deleteAllData(neo4jDriver);
+      expect(dataDeleted).toBe(true);
+      N1 = getRandomAddress();
+      G1 = getRandomAddress();
+      G2 = getRandomAddress();
+      S1 = getRandomAddress();
+      await initialize(true)
+    });
+    console.log("Test the transaction data store");
+
+    it("Creates an alert when a notifier sends a transaction to a scam address", async () => {
+      // Set a notifier address
+      await storeTransactionData(
+        neo4jDriver,
+        N1,
+        S1,
+        getRandomTxHash(),
+        "EOA",
+        "Alert ONE",
+        true // N1 is now a notifier
+      );
+
+      const N1_IsNotifier = await checkNotifier(neo4jDriver, N1)
+      expect(N1_IsNotifier).toBe(true);
+
+      const newAlertTx = createTx(
+        N1,
+        S1,
+        "this is a scam"
+      )
+
+      const newAlert = await handleTransaction(newAlertTx);
+      expect(newAlert).toStrictEqual([
+        Finding.fromObject(
+          {
+            name: 'Scam Notifier Alert',
+            description: `${S1} was flagged as a scam by ${N1} `,
+            alertId: 'SCAM-NOTIFIER-EOA',
+            protocol: 'ethereum',
+            severity: 4,
+            type: 2,
+            metadata: {
+              scammer_eoa: S1,
+              notifier_eoa: N1,
+              notifier_name: '',
+              message: 'this is a scam'
+            },
+            addresses: [],
+            labels: [
+              {
+                "confidence": 0.8,
+                "entity": N1,
+                "entityType": 1,
+                "label": "notifier_EOA",
+                "metadata": {
+                  "ENS_NAME": "",
+                },
+                "remove": false,
+              },
+              {
+                "confidence": 0.8,
+                "entity": S1,
+                "entityType": 1,
+                "label": "scammer_EOA",
+                "metadata": {},
+                "remove": false,
+              }
+            ]
+          }
+        ),
+      ]);
+    });
+
+
+    // Close the driver after all tests have been completed
+    afterAll(() => {
+      neo4jDriver.close();
+    });
   });
+
+
 });

@@ -42,23 +42,26 @@ const handleTransaction: HandleTransaction = async (
   if (!txEvent.to || !txEvent.transaction.data) {
     return findings;
   }
-
+  
   try {
 
     // Check if the transaction has a valid message
     const decodedData = containsWords(txEvent);
-    //console.log("isNotifier", isNotifier, txEvent.from.toLowerCase());
+    console.log("decodedData", decodedData);
+    console.log("txEvent", txEvent);
 
     if (decodedData.isValid && decodedData.text) {
+      console.log(txEvent.addresses)
       console.log(decodedData);
       // Get the type and of the recipient address
       const recipientAddressType = await getAddressType(txEvent.to, provider);
 
       // Check if the sender is a notifier
       const isNotifier = await checkNotifier(neo4jDriver, txEvent.from.toLowerCase());
+      
+      let newFinding: Finding | undefined = undefined;
 
       if (isNotifier) {
-        let newFinding: Finding;
         // All Notifiers transactions are saved in the DB
         const storeRes = await storeTransactionData(
           neo4jDriver,
@@ -81,8 +84,6 @@ const handleTransaction: HandleTransaction = async (
         }
 
         logs(txEvent, true, `ScamNotifierAlert Triggered ${txEvent.from} ` + txEvent.hash);
-        newFinding.metadata.message = decodedData.text;
-        findings.push(newFinding)
       } else {
         // Check that the recipient address is already in the DB
         const recipientExistsInDB = await recipientExists(neo4jDriver, txEvent.to);
@@ -111,12 +112,17 @@ const handleTransaction: HandleTransaction = async (
               sharingAddress: recipientNums[0],
               sharedRecipients: recipientNums
             }
-            const newFinding = await createScamNotifierAlert("NEW_NOTIFIER", txEvent, data);
-            newFinding.metadata.message = decodedData.text;
-            findings.push(newFinding)
+            newFinding = await createScamNotifierAlert("NEW_NOTIFIER", txEvent, data);
           }
         }
       }
+
+      if(!newFinding) {
+        return findings;
+      }
+
+      newFinding.metadata.message = decodedData.text;
+      findings.push(newFinding)
 
       // Check if sender has shared reports with notifiers, if so, change sender type to notifier
       //const shared = await sharedReportsCount(neo4jDriver, txEvent.from);
@@ -135,8 +141,13 @@ const handleTransaction: HandleTransaction = async (
   return findings;
 };
 
-const initialize: Initialize = async () => {
-  neo4jDriver = createDriver(DB_URL, DB_USER, DB_PASSWORD);
+const initialize: Initialize = async (test?: boolean) => {
+  if (test) {
+    neo4jDriver = createDriver('', '', '', "TEST");
+    console.log("----- TESTING -----");
+  } else {
+    neo4jDriver = createDriver(DB_URL, DB_USER, DB_PASSWORD);
+  }
 }
 
 export default {

@@ -4,7 +4,9 @@ import {
     FindingSeverity,
     FindingType,
     ethers,
-    getEthersProvider
+    getEthersProvider,
+    Label,
+    EntityType
 } from "forta-agent";
 
 import { findMostCommonRecipient } from "./db";
@@ -15,16 +17,16 @@ function isValidCharRatio(str: string) {
     const words = str.trim().split(/\s+/);
 
     if (words.length < 2) {
-      return false;
+        return false;
     }
-  
+
     if (validChars) {
-      const validCharRatio = validChars.length / totalChars;
-      return validCharRatio > 0.7;
+        const validCharRatio = validChars.length / totalChars;
+        return validCharRatio > 0.7;
     }
-  
+
     return false;
-  }
+}
 
 
 export function containsWords(txEvent: TransactionEvent): { isValid: boolean; text: string } {
@@ -126,6 +128,9 @@ export async function createScamNotifierAlert(
     const notifierEoa = txEvent.from;
     const notifierName = await getAddressName(provider, notifierEoa);
     const chainId = (await provider.getNetwork()).chainId;
+    const addresses = Object.keys(txEvent.addresses);
+    const labels: Label[] = [];
+
 
     switch (alertType) {
         case 'EOA':
@@ -137,6 +142,24 @@ export async function createScamNotifierAlert(
             //metadata.scammer_contracts = scammerContracts ? scammerContracts.join(', ') : '';
             metadata.notifier_eoa = notifierEoa;
             metadata.notifier_name = notifierName;
+            labels.push(Label.fromObject({
+                entityType: EntityType.Address,
+                entity: notifierEoa,
+                label: 'notifier_EOA',
+                confidence: 0.8,
+                remove: false,
+                metadata: {
+                    "ENS_NAME": notifierName
+                }
+            }))
+            labels.push(Label.fromObject({
+                entityType: EntityType.Address,
+                entity: scammerEoa,
+                label: 'scammer_EOA',
+                confidence: 0.8,
+                remove: false,
+                metadata: {}
+            }))
             break;
         case 'CONTRACT':
             description = `${scammerContract} was flagged as a scam by ${notifierEoa} ${notifierName}`;
@@ -148,6 +171,23 @@ export async function createScamNotifierAlert(
             metadata.scammer_eoa = scammer_eoa || 'Error finding deployer';
             metadata.notifier_eoa = notifierEoa;
             metadata.notifier_name = notifierName;
+            labels.push(Label.fromObject({
+                entityType: EntityType.Address,
+                entity: scammerEoa,
+                label: 'notifier_EOA',
+                confidence: 0.8,
+                remove: false,
+                metadata: {
+                    "ENS_NAME": notifierName
+                }
+            }))
+            labels.push(Label.fromObject({
+                entityType: EntityType.Address,
+                entity: scammerEoa,
+                label: 'scammer_Contract',
+                confidence: 0.8,
+                remove: false,
+            }))
             break;
         case 'NEW_NOTIFIER':
             description = `New scam notifier identified ${notifierEoa} ${notifierName}`;
@@ -159,6 +199,16 @@ export async function createScamNotifierAlert(
             metadata.similar_notifier_name = similar_notifier_name || 'Error finding similar_notifier_name';
             metadata.union_flagged = similarNotifiers?.sharedRecipients?.length ? similarNotifiers.sharedRecipients.join(', ') : '';
             metadata.notifierName = notifierName;
+            labels.push(Label.fromObject({
+                entityType: EntityType.Address,
+                entity: scammerEoa,
+                label: 'new_notifier_EOA',
+                confidence: 0.8,
+                remove: false,
+                metadata: {
+                    "ENS_NAME": notifierName
+                }
+            }))
             break;
     }
 
@@ -169,5 +219,7 @@ export async function createScamNotifierAlert(
         severity,
         type,
         metadata,
+        addresses,
+        labels
     });
 }
