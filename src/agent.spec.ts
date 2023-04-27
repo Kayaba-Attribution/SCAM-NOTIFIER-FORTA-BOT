@@ -37,16 +37,6 @@ import {
 } from "./db";
 import { Driver, Result, auth, driver as createDriverInstance } from "neo4j-driver";
 
-// jest.mock("./db", () => ({
-//   storeTransactionData: jest.fn(),
-//   createDriver: jest.fn().mockReturnValue({
-//     session: jest.fn().mockReturnValue({
-//       run: jest.fn(),
-//       close: jest.fn(),
-//     }),
-//   }),
-// }));
-
 
 function getRandomTxHash() {
   const randomBytes = ethers.utils.randomBytes(32);
@@ -94,14 +84,203 @@ function sleep(ms: number) {
 
 
 describe("SCAM-NOTIFIER-BOT db logic", () => {
+  type Initialize = (test?: boolean) => Promise<InitializeResponse | void>;
+  let initialize: Initialize;
   let handleTransaction: HandleTransaction;
   let neo4jDriver: Driver;
+  let N1: string;
+  let N2: string;
+  let G1: string;
+  let S1: string;
+  let S2: string;
 
   beforeAll(async () => {
+    initialize = agent.initialize;
     handleTransaction = agent.handleTransaction;
     neo4jDriver = createDriver('', '', '', "TEST");
     const dataDeleted = await deleteAllData(neo4jDriver);
     expect(dataDeleted).toBe(true);
+    N1 = getRandomAddress();
+    N2 = getRandomAddress();
+    G1 = getRandomAddress();
+    S1 = getRandomAddress();
+    S2 = getRandomAddress();
+    await initialize(true)
+  });
+
+  describe("Bot Alerts Test", () => {
+
+    it("Creates an alert when a notifier sends a transaction to a scam address", async () => {
+      // Set a notifier address
+      await storeTransactionData(
+        neo4jDriver,
+        N1,
+        S1,
+        getRandomTxHash(),
+        "EOA",
+        "Alert ONE",
+        true // N1 is now a notifier
+      );
+
+      const N1_IsNotifier = await checkNotifier(neo4jDriver, N1)
+      expect(N1_IsNotifier).toBe(true);
+
+      const newAlertTx = createTx(
+        N1,
+        S1,
+        "this is a scam"
+      )
+
+      const newAlert = await handleTransaction(newAlertTx);
+      expect(newAlert).toStrictEqual([
+        Finding.fromObject(
+          {
+            name: 'Scam Notifier Alert',
+            description: `${S1} was flagged as a scam by ${N1} `,
+            alertId: 'SCAM-NOTIFIER-EOA',
+            protocol: 'ethereum',
+            severity: 4,
+            type: 2,
+            metadata: {
+              scammer_eoa: S1,
+              notifier_eoa: N1,
+              notifier_name: '',
+              message: 'this is a scam'
+            },
+            addresses: [],
+            labels: [
+              {
+                "confidence": 0.8,
+                "entity": N1,
+                "entityType": 1,
+                "label": "notifier_EOA",
+                "metadata": {
+                  "ENS_NAME": "",
+                },
+                "remove": false,
+              },
+              {
+                "confidence": 0.8,
+                "entity": S1,
+                "entityType": 1,
+                "label": "scammer_EOA",
+                "metadata": {},
+                "remove": false,
+              }
+            ]
+          }
+        ),
+      ]);
+    });
+
+    it("Adds a general address when it sends a transaction to a known scam address", async () => {
+      const G1_IsNotifier = await checkNotifier(neo4jDriver, G1)
+      expect(G1_IsNotifier).toBe(false);
+
+      const newAlertTx = createTx(
+        G1,
+        S1,
+        "scam honeypot",
+        "custom_hash"
+      )
+
+      const consoleSpy = jest.spyOn(console, "log");
+      const newAlert = await handleTransaction(newAlertTx);
+      expect(consoleSpy).toHaveBeenCalledWith("[Success] [Regular] Saved transaction data custom_hash msg: scam honeypot");
+      consoleSpy.mockRestore();
+      console.log("newAlert", newAlert);
+
+      const G1_ExistInDb = await senderExists(neo4jDriver, G1);
+      expect(G1_ExistInDb).toBe(true);
+
+      const G1_IsNotifierAfterAddedToDb = await checkNotifier(neo4jDriver, G1)
+      expect(G1_IsNotifierAfterAddedToDb).toBe(false);
+    });
+
+    it("Regular address becomes a new notifier when it flags at least 2 scam addresses", async () => {
+      // Another notifier sends a transaction to a another scam address
+      await storeTransactionData(
+        neo4jDriver,
+        N2,
+        S2,
+        getRandomTxHash(),
+        "EOA",
+        "Alert THIS IS ALSO A SCAM"
+      );
+
+      // General Address also sends a transaction to the same scam address
+      // Now it would have 2 flagged scam addresses
+
+      const newAlertTx = createTx(
+        G1,
+        S2,
+        "scam honeypot TWO",
+      )
+
+      const newAlert = await handleTransaction(newAlertTx);
+
+      const G1_IsNotifier = await checkNotifier(neo4jDriver, G1)
+      expect(G1_IsNotifier).toBe(true);
+
+      expect(newAlert).toStrictEqual([
+        Finding.fromObject(
+          {
+            name: 'Scam Notifier Alert',
+            description: `New scam notifier identified ${G1} `,
+            alertId: 'NEW-SCAM-NOTIFIER',
+            protocol: 'ethereum',
+            severity: 1,
+            type: 4,
+            metadata: {
+              similar_notifier_eoa: N2,
+              similar_notifier_name: 'Not Found',
+              union_flagged: `${N2}, ${N1}`,
+              notifierName: 'Not found',
+              message: 'scam honeypot TWO'
+            },
+            addresses: [],
+            labels: [
+              {
+                "confidence": 1.0,
+                "entity": G1,
+                "entityType": 1,
+                "label": "new_notifier_EOA",
+                "metadata": {
+                  "ENS_NAME": "",
+                },
+                "remove": false,
+              },
+              {
+                "confidence": 0.8,
+                "entity": S2,
+                "entityType": 1,
+                "label": "scammer_EOA",
+                "metadata": {},
+                "remove": false,
+              },
+              {
+                "confidence": 0.8,
+                "entity": N2,
+                "entityType": 1,
+                "label": "union_flagged",
+                "metadata": {},
+                "remove": false,
+              },
+              {
+                "confidence": 0.8,
+                "entity": N1,
+                "entityType": 1,
+                "label": "union_flagged",
+                "metadata": {},
+                "remove": false,
+              }
+            ]
+          }
+        ),
+      ]);
+
+    });
+
   });
 
   describe("Core DB Logic Test", () => {
@@ -288,139 +467,9 @@ describe("SCAM-NOTIFIER-BOT db logic", () => {
     // });
 
     // Close the driver after all tests have been completed
-    afterAll(() => {
-      neo4jDriver.close();
-    });
   });
 
-  describe("Bot Alerts Test", () => {
-    type Initialize = (test?: boolean) => Promise<InitializeResponse | void>;
-    let initialize: Initialize;
-    let handleTransaction: HandleTransaction;
-    let N1: string;
-    let G1: string;
-    let G2: string;
-    let S1: string;
-    let S2: string;
-
-    beforeAll(async () => {
-      initialize = agent.initialize;
-      handleTransaction = agent.handleTransaction;
-      neo4jDriver = createDriver('', '', '', "TEST");
-      const dataDeleted = await deleteAllData(neo4jDriver);
-      expect(dataDeleted).toBe(true);
-      N1 = getRandomAddress();
-      G1 = getRandomAddress();
-      G2 = getRandomAddress();
-      S1 = getRandomAddress();
-      S2 = getRandomAddress();
-      await initialize(true)
-    });
-    console.log("Test the transaction data store");
-
-    it("Creates an alert when a notifier sends a transaction to a scam address", async () => {
-      // Set a notifier address
-      await storeTransactionData(
-        neo4jDriver,
-        N1,
-        S1,
-        getRandomTxHash(),
-        "EOA",
-        "Alert ONE",
-        true // N1 is now a notifier
-      );
-
-      const N1_IsNotifier = await checkNotifier(neo4jDriver, N1)
-      expect(N1_IsNotifier).toBe(true);
-
-      const newAlertTx = createTx(
-        N1,
-        S1,
-        "this is a scam"
-      )
-
-      const newAlert = await handleTransaction(newAlertTx);
-      expect(newAlert).toStrictEqual([
-        Finding.fromObject(
-          {
-            name: 'Scam Notifier Alert',
-            description: `${S1} was flagged as a scam by ${N1} `,
-            alertId: 'SCAM-NOTIFIER-EOA',
-            protocol: 'ethereum',
-            severity: 4,
-            type: 2,
-            metadata: {
-              scammer_eoa: S1,
-              notifier_eoa: N1,
-              notifier_name: '',
-              message: 'this is a scam'
-            },
-            addresses: [],
-            labels: [
-              {
-                "confidence": 0.8,
-                "entity": N1,
-                "entityType": 1,
-                "label": "notifier_EOA",
-                "metadata": {
-                  "ENS_NAME": "",
-                },
-                "remove": false,
-              },
-              {
-                "confidence": 0.8,
-                "entity": S1,
-                "entityType": 1,
-                "label": "scammer_EOA",
-                "metadata": {},
-                "remove": false,
-              }
-            ]
-          }
-        ),
-      ]);
-    });
-
-    it("Adds a general address when it sends a transaction to a known scam address", async () => {
-      // Notifier sends a transaction to a another scam address
-      await storeTransactionData(
-        neo4jDriver,
-        N1,
-        S2,
-        getRandomTxHash(),
-        "EOA",
-        "Alert THIS IS ALSO A SCAM"
-      );
-
-      const G1_IsNotifier = await checkNotifier(neo4jDriver, G1)
-      expect(G1_IsNotifier).toBe(false);
-
-      const newAlertTx = createTx(
-        G1,
-        S1,
-        "scam honeypot",
-        "custom_hash"
-      )
-
-      const consoleSpy = jest.spyOn(console, "log"); 
-      const newAlert = await handleTransaction(newAlertTx);
-      expect(consoleSpy).toHaveBeenCalledWith("[Success] [Regular] Saved transaction data custom_hash msg: scam honeypot");
-      consoleSpy.mockRestore();
-      console.log("newAlert", newAlert);
-
-      const G1_ExistInDb = await senderExists(neo4jDriver, G1);
-      expect(G1_ExistInDb).toBe(true);
-
-      const G1_IsNotifierAfterAddedToDb = await checkNotifier(neo4jDriver, G1)
-      expect(G1_IsNotifierAfterAddedToDb).toBe(false);
-    });
-
-
-    // Close the driver after all tests have been completed
-    afterAll(() => {
-      neo4jDriver.close();
-    });
+  afterAll(() => {
+    neo4jDriver.close();
   });
-
-
 });

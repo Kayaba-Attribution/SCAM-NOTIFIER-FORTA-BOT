@@ -13,7 +13,6 @@ import {
   getEthersProvider
 } from "forta-agent";
 
-
 // import createDriver from db.ts
 import { createDriver, storeTransactionData, numberOfRecipients, recipientExists, setAddressTypeToNotifier, checkNotifier, sharedReportsCount, findMostCommonRecipient } from "./db";
 import { containsWords, logs, getAddressType, createScamNotifierAlert } from "./utils";
@@ -42,7 +41,7 @@ const handleTransaction: HandleTransaction = async (
   if (!txEvent.to || !txEvent.transaction.data) {
     return findings;
   }
-  
+
   try {
 
     // Check if the transaction has a valid message
@@ -58,7 +57,7 @@ const handleTransaction: HandleTransaction = async (
 
       // Check if the sender is a notifier
       const isNotifier = await checkNotifier(neo4jDriver, txEvent.from.toLowerCase());
-      
+
       let newFinding: Finding | undefined = undefined;
 
       if (isNotifier) {
@@ -107,7 +106,10 @@ const handleTransaction: HandleTransaction = async (
 
           // Change sender type to notifier if the sender has sent more than 2 transactions
           if (recipientNums.length >= 2) {
+            //console.log("ADDRESS TYPE CHANGED TO NOTIFIER");
             await setAddressTypeToNotifier(neo4jDriver, txEvent.from);
+            logs(txEvent, true, `New Notifier Added ${txEvent.from} ` + txEvent.hash);
+
             const data = {
               sharingAddress: recipientNums[0],
               sharedRecipients: recipientNums
@@ -117,7 +119,7 @@ const handleTransaction: HandleTransaction = async (
         }
       }
 
-      if(!newFinding) {
+      if (!newFinding) {
         return findings;
       }
 
@@ -144,7 +146,6 @@ const handleTransaction: HandleTransaction = async (
 const initialize: Initialize = async (test?: boolean) => {
   if (test) {
     neo4jDriver = createDriver('', '', '', "TEST");
-    console.log("----- TESTING -----");
   } else {
     neo4jDriver = createDriver(DB_URL, DB_USER, DB_PASSWORD);
   }

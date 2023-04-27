@@ -9,6 +9,10 @@ import {
     EntityType
 } from "forta-agent";
 
+//import crossFetch from 'cross-fetch';
+//global.fetch = crossFetch;
+
+
 import { findMostCommonRecipient } from "./db";
 
 function isValidCharRatio(str: string) {
@@ -86,7 +90,11 @@ async function getAddressName(provider: ethers.providers.Provider, address: stri
     return name || "";
 }
 
-
+interface EtherscanResponse {
+    result: {
+      contractCreator: string;
+    }[];
+  }
 
 async function getContractCreation(contractAddress: string): Promise<string> {
     const baseUrl = "https://api.etherscan.io/api";
@@ -98,16 +106,21 @@ async function getContractCreation(contractAddress: string): Promise<string> {
         apikey: 'CYZ7EYXTR5H5Z7R5J17UAEIEFCPUJVN4KC',
     });
 
-    const url = `${baseUrl}?${queryParams.toString()}`;
-    const response = await fetch(url);
-
-    if (!response.ok) {
-        throw new Error(`Error fetching data: ${response.statusText}`);
+    try {
+        const url = `${baseUrl}?${queryParams.toString()}`;
+        const response = await fetch(url);
+    
+        if (!response.ok) {
+            console.log(`Error fetching data: ${response.statusText} for ${contractAddress}`);
+        }
+    
+        const data = (await response.json()) as EtherscanResponse;
+        const contractCreator = data.result[0].contractCreator;
+        return contractCreator || "Not Found";
+    } catch (error) {
+        console.log(`Error fetching data: ${error} for ${contractAddress}`);
+        return "Not Found";
     }
-
-    const data = await response.json();
-    const contractCreator = data.result[0].contractCreator;
-    return contractCreator;
 }
 
 type ScamAlertType = 'EOA' | 'CONTRACT' | 'NEW_NOTIFIER';
@@ -195,20 +208,38 @@ export async function createScamNotifierAlert(
             type = FindingType.Info;
             alertId = 'NEW-SCAM-NOTIFIER';
             metadata.similar_notifier_eoa = similarNotifiers?.sharingAddress || 'err';
-            const similar_notifier_name = chainId == 1 ? await getContractCreation(metadata.similar_notifier_eoa) : "Not available";
-            metadata.similar_notifier_name = similar_notifier_name || 'Error finding similar_notifier_name';
+            const similar_notifier_name = chainId == 1 ? await getAddressName(provider, metadata.similar_notifier_eoa) : "Not Found";
+            metadata.similar_notifier_name = similar_notifier_name || 'Not Found';
             metadata.union_flagged = similarNotifiers?.sharedRecipients?.length ? similarNotifiers.sharedRecipients.join(', ') : '';
-            metadata.notifierName = notifierName;
+            metadata.notifierName = notifierName || 'Not found';
             labels.push(Label.fromObject({
                 entityType: EntityType.Address,
-                entity: scammerEoa,
+                entity: notifierEoa,
                 label: 'new_notifier_EOA',
-                confidence: 0.8,
+                confidence: 1.0,
                 remove: false,
                 metadata: {
                     "ENS_NAME": notifierName
                 }
             }))
+            labels.push(Label.fromObject({
+                entityType: EntityType.Address,
+                entity: scammerEoa,
+                label: 'scammer_EOA',
+                confidence: 0.8,
+                remove: false,
+                metadata: {}
+            }))
+            for(const e of similarNotifiers?.sharedRecipients || []) {
+                labels.push(Label.fromObject({
+                    entityType: EntityType.Address,
+                    entity: e,
+                    label: 'union_flagged',
+                    confidence: 0.8,
+                    remove: false,
+                    metadata: {}
+                }))
+            }
             break;
     }
 
