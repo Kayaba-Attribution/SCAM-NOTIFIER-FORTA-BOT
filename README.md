@@ -138,3 +138,39 @@ Known Notifiers:
 - 0xcd5496ef9d7fb6657c9f1a4a1753f645994fbfa9 (scamwarning.eth)
 - 0xba6e11347856c79797af6b2eac93a8145746b4f9 (🛑scam-warning🛑.eth)
 - 0xc574962311141cb505c09fd973c4630b8f7c4a81 (🔴dev-will-dump-on-you🔴.eth)
+
+
+Special Case:
+
+- 0x666a3ce3f9438dccd4a885ba5b565f3035984793 (metasleuth911.eth)
+
+Hi is this approach feasable:
+
+tx1 - 0x73224d4846913a29964b243f4b1d73bd3ef1052f20130ba996e3d6bc8ee626ac:
+
+'Your token (USDT) has been transferred to 0xf6728c9c78d3a794770960c37b4708e395fae079. Since you have approved your token to a phishing address, we suspect this is a phishing attack. Please see the detailed report https://metasleuth.io/report?report_id=4f50fb859781cadb922c8e6ed90504ae Revoke your approval to the scammer immediately to prevent further loss. Read this document on how to revoke your approval: https://docs.blocksec.com/metadock/features/approval-diagnosis'
+
+extra info: transferred (USDT) 0xf6728c9c78d3a794770960c37b4708e395fae079
+
+{
+  tokenName: 'USDT',
+  action: 'transferred',
+  entity: '0xf6728c9c78d3a794770960c37b4708e395fae079'
+}
+
+
+
+tx2 - 0x2b0e1f5d7d798c4c8e3e32741de44a83065ef2053252d9f0cdf0398e0bfb4870
+Your token (MATIC) has been approved to the scammer (0xfb4d3eb37bde8fa4b52c60aabe55b3cd9908ec73).
+
+'Your token (MATIC) has been approved to the scammer (0xfb4d3eb37bde8fa4b52c60aabe55b3cd9908ec73). Please see the detailed report https://metasleuth.io/report?report_id=24850a6cf72a587a9a1ac0fe120845cf Revoke your approval to the scammer immediately to prevent further loss. Read this document on how to revoke your approval: https://docs.blocksec.com/metadock/features/approval-diagnosis '
+
+extra info: approved (MATIC) 0xfb4d3eb37bde8fa4b52c60aabe55b3cd9908ec73
+
+{
+  tokenName: 'MATIC',
+  action: 'approved',
+  entity: '0xfb4d3eb37bde8fa4b52c60aabe55b3cd9908ec73'
+}
+
+

@@ -15,6 +15,33 @@ import {
 
 import { findMostCommonRecipient } from "./db";
 
+export type ExtractedData = {
+    tokenName: string;
+    action: string;
+    entity: string;
+};
+
+export function extractData(input: string): ExtractedData | null {
+    const tokenNameRegex = /\((\w+)\)/;
+    const actionRegex = /(transferred|approved)/;
+    const entityRegex = /(0x[a-fA-F0-9]{40})/;
+
+    const tokenNameMatch = input.match(tokenNameRegex);
+    const actionMatch = input.match(actionRegex);
+    const entityMatch = input.match(entityRegex);
+
+    if (tokenNameMatch && actionMatch && entityMatch) {
+        return {
+            tokenName: tokenNameMatch[1],
+            action: actionMatch[0],
+            entity: entityMatch[0],
+        };
+    }
+
+    return null;
+}
+
+
 function isValidCharRatio(str: string) {
     const totalChars = str.length;
     const validChars = str.match(/[a-zA-Z0-9\s]/g);
@@ -92,9 +119,9 @@ async function getAddressName(provider: ethers.providers.Provider, address: stri
 
 interface EtherscanResponse {
     result: {
-      contractCreator: string;
+        contractCreator: string;
     }[];
-  }
+}
 
 async function getContractCreation(contractAddress: string): Promise<string> {
     const baseUrl = "https://api.etherscan.io/api";
@@ -109,11 +136,11 @@ async function getContractCreation(contractAddress: string): Promise<string> {
     try {
         const url = `${baseUrl}?${queryParams.toString()}`;
         const response = await fetch(url);
-    
+
         if (!response.ok) {
             console.log(`Error fetching data: ${response.statusText} for ${contractAddress}`);
         }
-    
+
         const data = (await response.json()) as EtherscanResponse;
         const contractCreator = data.result[0].contractCreator;
         return contractCreator || "Not Found";
@@ -230,7 +257,7 @@ export async function createScamNotifierAlert(
                 remove: false,
                 metadata: {}
             }))
-            for(const e of similarNotifiers?.sharedRecipients || []) {
+            for (const e of similarNotifiers?.sharedRecipients || []) {
                 labels.push(Label.fromObject({
                     entityType: EntityType.Address,
                     entity: e,

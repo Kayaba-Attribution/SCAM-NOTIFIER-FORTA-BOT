@@ -15,7 +15,7 @@ import {
 
 // import createDriver from db.ts
 import { createDriver, storeTransactionData, numberOfRecipients, recipientExists, setAddressTypeToNotifier, checkNotifier, sharedReportsCount, findMostCommonRecipient } from "./db";
-import { containsWords, logs, getAddressType, createScamNotifierAlert } from "./utils";
+import { containsWords, logs, getAddressType, createScamNotifierAlert, extractData, ExtractedData } from "./utils";
 import { Driver, Result, auth, driver as createDriverInstance } from "neo4j-driver";
 import dotenv from 'dotenv';
 
@@ -52,6 +52,15 @@ const handleTransaction: HandleTransaction = async (
     if (decodedData.isValid && decodedData.text) {
       console.log(txEvent.addresses)
       console.log(decodedData);
+
+      // check for metasleuth911.eth
+      const extraData = extractData(decodedData.text)
+      // if(extraData){
+      //   console.log(extraData)
+      //   newFinding.metadata.extraInfo = `[${extraData.action}] (${extraData.tokenName}) ${extraData.entity}`;
+      //   console.log(`${extraData.action} (${extraData.tokenName}) ${extraData.entity}`)
+      // }
+
       // Get the type and of the recipient address
       const recipientAddressType = await getAddressType(txEvent.to, provider);
 
@@ -121,6 +130,10 @@ const handleTransaction: HandleTransaction = async (
 
       if (!newFinding) {
         return findings;
+      }
+      
+      if(extraData){
+        newFinding.metadata.extraInfo = `[${extraData.action}] (${extraData.tokenName}) ${extraData.entity}`;
       }
 
       newFinding.metadata.message = decodedData.text;
