@@ -173,4 +173,12 @@ extra info: approved (MATIC) 0xfb4d3eb37bde8fa4b52c60aabe55b3cd9908ec73
   entity: '0xfb4d3eb37bde8fa4b52c60aabe55b3cd9908ec73'
 }
 
+Metasluth911.eth
+
+https://etherscan.io/tx/0xbbc1bf258a6aa6edc29c1762f302355c37b7df96850fcb0636d4fae9ee86a91f
+
+https://explorer.forta.network/alert/0x9b4cfd5787079a52a5777a9e2955f5d10baadbc0af67ce231a91ee4614a00c7b
+
+Tx ~24 sec after the alert
+
 
