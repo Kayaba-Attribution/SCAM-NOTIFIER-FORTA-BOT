@@ -21,24 +21,40 @@ export type ExtractedData = {
     entity: string;
 };
 
-export function extractData(input: string): ExtractedData | null {
-    const tokenNameRegex = /\((\w+)\)/;
-    const actionRegex = /(transferred|approved)/;
-    const entityRegex = /(0x[a-fA-F0-9]{40})/;
+export function extractData(text: string) {
+    let info: any = {};
 
-    const tokenNameMatch = input.match(tokenNameRegex);
-    const actionMatch = input.match(actionRegex);
-    const entityMatch = input.match(entityRegex);
-
-    if (tokenNameMatch && actionMatch && entityMatch) {
-        return {
-            tokenName: tokenNameMatch[1],
-            action: actionMatch[0],
-            entity: entityMatch[0],
-        };
+    // match and extract the token
+    let tokenMatch = text.match(/Your token \((.*?)\)/);
+    if (tokenMatch) {
+        info['token'] = tokenMatch[1];
     }
 
-    return null;
+    // match and extract the action
+    let actionMatch = text.match(/Your token \(.*?\) has been (.*?) to/);
+    if (actionMatch) {
+        info['action'] = actionMatch[1];
+    } else {
+        info['action'] = "approved";
+    }
+
+    // match and extract the address
+    let addressMatch = text.match(/(0x[a-fA-F0-9]{40})/);
+    if (addressMatch) {
+        info['address'] = addressMatch[1];
+    }
+
+    // check type
+    if (text.includes('phishing attack')) {
+        info['type'] = 'phishing transfer';
+    } else {
+        info['type'] = 'phishing approval';
+    }
+
+    // return the info object if it contains exactly four keys, otherwise return null
+    return Object.keys(info).length === 4 ? info : null;
+
+
 }
 
 
@@ -150,11 +166,12 @@ async function getContractCreation(contractAddress: string): Promise<string> {
     }
 }
 
-type ScamAlertType = 'EOA' | 'CONTRACT' | 'NEW_NOTIFIER';
+type ScamAlertType = 'EOA' | 'CONTRACT' | 'NEW_NOTIFIER' | 'VICTIM';
 
 export async function createScamNotifierAlert(
     alertType: ScamAlertType,
     txEvent: TransactionEvent,
+    extraInfo?: any,
     similarNotifiers?: { sharingAddress: string; sharedRecipients: string[] },
 ): Promise<Finding> {
     let description: string;
@@ -173,6 +190,43 @@ export async function createScamNotifierAlert(
 
 
     switch (alertType) {
+        case 'VICTIM':
+            // ! scammerEoa is the victim in this case.
+            description = `${notifierEoa}${notifierName} alerted ${scammerEoa} from a ${extraInfo.token} ${extraInfo.type} to ${extraInfo.address}`;
+            severity = FindingSeverity.High;
+            type = FindingType.Exploit;
+            alertId = 'VICTIM-NOTIFIER-EOA';
+            metadata.victim_eoa = scammerEoa;
+            metadata.scammer_eoa = extraInfo.address;
+            metadata.notifier_eoa = notifierEoa;
+            metadata.notifier_name = notifierName;
+            labels.push(Label.fromObject({
+                entityType: EntityType.Address,
+                entity: notifierEoa,
+                label: 'notifier_EOA',
+                confidence: 0.8,
+                remove: false,
+                metadata: {
+                    "ENS_NAME": notifierName
+                }
+            }))
+            labels.push(Label.fromObject({
+                entityType: EntityType.Address,
+                entity: scammerEoa,
+                label: 'victim_EOA',
+                confidence: 0.8,
+                remove: false,
+                metadata: {}
+            }))
+            labels.push(Label.fromObject({
+                entityType: EntityType.Address,
+                entity: extraInfo.address,
+                label: 'scammer_EOA',
+                confidence: 0.8,
+                remove: false,
+                metadata: {}
+            }))
+            break;
         case 'EOA':
             description = `${scammerEoa} was flagged as a scam by ${notifierEoa} ${notifierName}`;
             severity = FindingSeverity.High;
@@ -228,6 +282,16 @@ export async function createScamNotifierAlert(
                 confidence: 0.8,
                 remove: false,
             }))
+            if(scammer_eoa){
+                labels.push(Label.fromObject({
+                    entityType: EntityType.Address,
+                    entity: scammer_eoa,
+                    label: 'scammer_EOA',
+                    confidence: 0.8,
+                    remove: false,
+                    metadata: {}
+                }))
+            }
             break;
         case 'NEW_NOTIFIER':
             description = `New scam notifier identified ${notifierEoa} ${notifierName}`;

@@ -47,19 +47,13 @@ const handleTransaction: HandleTransaction = async (
     // Check if the transaction has a valid message
     const decodedData = containsWords(txEvent);
     console.log("decodedData", decodedData);
-    console.log("txEvent", txEvent);
 
     if (decodedData.isValid && decodedData.text) {
-      console.log(txEvent.addresses)
-      console.log(decodedData);
-
       // check for metasleuth911.eth
       const extraData = extractData(decodedData.text)
-      // if(extraData){
-      //   console.log(extraData)
-      //   newFinding.metadata.extraInfo = `[${extraData.action}] (${extraData.tokenName}) ${extraData.entity}`;
-      //   console.log(`${extraData.action} (${extraData.tokenName}) ${extraData.entity}`)
-      // }
+      if (extraData) {
+        console.log(extraData)
+      }
 
       // Get the type and of the recipient address
       const recipientAddressType = await getAddressType(txEvent.to, provider);
@@ -82,8 +76,12 @@ const handleTransaction: HandleTransaction = async (
         )
         logs(txEvent, storeRes, `[Notifier] Saved transaction data ${txEvent.hash} msg: ${decodedData.text}`);
 
+        // If the sender is alerting a vitcim
+        if (extraData) {
+          newFinding = await createScamNotifierAlert("VICTIM", txEvent, extraData)
+        }
         // If the recipient is an EOA, create the alert SCAM-NOTIFIER-EOA
-        if (recipientAddressType === "EOA") {
+        else if (recipientAddressType === "EOA") {
           newFinding = await createScamNotifierAlert("EOA", txEvent)
         }
         // If the recipient is a contract, create the alert SCAM-NOTIFIER-CONTRACT
@@ -123,17 +121,13 @@ const handleTransaction: HandleTransaction = async (
               sharingAddress: recipientNums[0],
               sharedRecipients: recipientNums
             }
-            newFinding = await createScamNotifierAlert("NEW_NOTIFIER", txEvent, data);
+            newFinding = await createScamNotifierAlert("NEW_NOTIFIER", txEvent, extraData, data);
           }
         }
       }
 
       if (!newFinding) {
         return findings;
-      }
-      
-      if(extraData){
-        newFinding.metadata.extraInfo = `[${extraData.action}] (${extraData.tokenName}) ${extraData.entity}`;
       }
 
       newFinding.metadata.message = decodedData.text;

@@ -108,7 +108,7 @@ describe("SCAM-NOTIFIER-BOT db logic", () => {
     await initialize(true)
   });
 
-  describe("Bot Alerts Test", () => {
+  describe.only("Bot Alerts Test", () => {
 
     it("Creates an alert when a notifier sends a transaction to a scam address", async () => {
       // Set a notifier address
@@ -162,6 +162,79 @@ describe("SCAM-NOTIFIER-BOT db logic", () => {
               {
                 "confidence": 0.8,
                 "entity": S1,
+                "entityType": 1,
+                "label": "scammer_EOA",
+                "metadata": {},
+                "remove": false,
+              }
+            ]
+          }
+        ),
+      ]);
+    });
+
+    it("Creates an VICTIM alert when a notifier sends a transaction to a scam address", async () => {
+      // Set a notifier address
+      await storeTransactionData(
+        neo4jDriver,
+        N1,
+        S1,
+        getRandomTxHash(),
+        "EOA",
+        "Alert ONE",
+        true // N1 is now a notifier
+      );
+
+      const N1_IsNotifier = await checkNotifier(neo4jDriver, N1)
+      expect(N1_IsNotifier).toBe(true);
+
+      const newAlertTx = createTx(
+        N1,
+        S1,
+        "Your token (MATIC) has been approved to the scammer (0xfb4d3eb37bde8fa4b52c60aabe55b3cd9908ec73). Please see the detailed report https://metasleuth.io/report?report_id=24850a6cf72a587a9a1ac0fe120845cf Revoke your approval to the scammer immediately to prevent further loss. Read this document on how to revoke your approval: https://docs.blocksec.com/metadock/features/approval-diagnosis"
+      )
+
+      const newAlert = await handleTransaction(newAlertTx);
+      expect(newAlert).toStrictEqual([
+        Finding.fromObject(
+          {
+            name: 'Scam Notifier Alert',
+            description: `${N1} alerted ${S1} from a MATIC phishing approval to 0xfb4d3eb37bde8fa4b52c60aabe55b3cd9908ec73`,
+            alertId: 'VICTIM-NOTIFIER-EOA',
+            protocol: 'ethereum',
+            severity: 4,
+            type: 1,
+            metadata: {
+              scammer_eoa: '0xfb4d3eb37bde8fa4b52c60aabe55b3cd9908ec73',
+              notifier_eoa: N1,
+              notifier_name: '',
+              message: 'Your token (MATIC) has been approved to the scammer (0xfb4d3eb37bde8fa4b52c60aabe55b3cd9908ec73). Please see the detailed report https://metasleuth.io/report?report_id=24850a6cf72a587a9a1ac0fe120845cf Revoke your approval to the scammer immediately to prevent further loss. Read this document on how to revoke your approval: https://docs.blocksec.com/metadock/features/approval-diagnosis',
+              victim_eoa: S1
+            },
+            addresses: [],
+            labels: [
+              {
+                "confidence": 0.8,
+                "entity": N1,
+                "entityType": 1,
+                "label": "notifier_EOA",
+                "metadata": {
+                  "ENS_NAME": "",
+                },
+                "remove": false,
+              },
+              {
+                "confidence": 0.8,
+                "entity": S1,
+                "entityType": 1,
+                "label": "victim_EOA",
+                "metadata": {},
+                "remove": false,
+              }
+              ,
+              {
+                "confidence": 0.8,
+                "entity": '0xfb4d3eb37bde8fa4b52c60aabe55b3cd9908ec73',
                 "entityType": 1,
                 "label": "scammer_EOA",
                 "metadata": {},
