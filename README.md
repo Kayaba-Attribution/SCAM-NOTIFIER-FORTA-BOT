@@ -2,7 +2,11 @@
 
 ## Description
 
-This bot monitors notification EOAs and emit an alert on the scam contract/EOA associated with the to address the scam notifier sends messages to and automatically updates the list of notification EOAs by performing an analysis based on other notifications.
+This bot monitors notification EOAs and emit an alert on the scam contract/EOA associated with the to address the scam notifier sends messages to and create alerts for new possible notification EOAs by performing an analysis based on other notifications.
+
+New possible notifiers are then checked manually and added if they are valid.
+
+> Last Manual Update: Jul 10 3pm (UTC)
 
 1. Checks transcations Input Data to see if there is a valid message
 2. If so the from, to, hash, recipientAddressType, and text is saved in a Neo4j db.
@@ -12,22 +16,25 @@ This bot monitors notification EOAs and emit an alert on the scam contract/EOA a
 - If the message was sent to an EOA, it will create the alert SCAM-NOTIFIER-EOA
 - If the message was sent to an Contract, it will create the alert SCAM-NOTIFIER-CONTRACT
 
-4. The bot has logic to add new new notifier addresses:
+4. The bot has logic to identify new new notifier addresses:
 
 - Checks if the sender address have any reports in common with known notifiers
 - If the amount of shared reports is >= 2 the address is upgraded to notifier
-- If a new notifier is added, it will create the alert NEW-SCAM-NOTIFIER
+- If a new notifier is identified, it will create the alert NEW-SCAM-NOTIFIER
+- Then alerts are filter from the explorer and new possible notifiers are checked and added
 
 ### New Address addition
 
 + Only save messages that are sended to an address that has previously flagged by a notifier
   + Check if msg Recipient exist in the db
   + If yes save the sender, tx, and connect
-+ When an regular address have at least 2 Transactions, promote it to Notifier
++ When an regular address have at least 2 Transactions, create a new Notifier alert
 
 ## Supported Chains
 
 - Ethereum
+- BSC
+- Polygon
 
 ## Alerts
 
