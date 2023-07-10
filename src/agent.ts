@@ -46,13 +46,14 @@ const handleTransaction: HandleTransaction = async (
 
     // Check if the transaction has a valid message
     const decodedData = containsWords(txEvent);
-    console.log("decodedData", decodedData);
 
     if (decodedData.isValid && decodedData.text) {
+      console.log("decodedData", decodedData);
+      
       // check for metasleuth911.eth
       const extraData = extractData(decodedData.text)
       if (extraData) {
-        console.log(extraData)
+        console.log("VICIM ALERT OBJECT:", extraData)
       }
 
       // Get the type and of the recipient address
@@ -114,7 +115,7 @@ const handleTransaction: HandleTransaction = async (
           // Change sender type to notifier if the sender has sent more than 2 transactions
           if (recipientNums.length >= 2) {
             //console.log("ADDRESS TYPE CHANGED TO NOTIFIER");
-            await setAddressTypeToNotifier(neo4jDriver, txEvent.from);
+            //await setAddressTypeToNotifier(neo4jDriver, txEvent.from);
             logs(txEvent, true, `New Notifier Added ${txEvent.from} ` + txEvent.hash);
 
             const data = {
@@ -154,7 +155,7 @@ const initialize: Initialize = async (test?: boolean) => {
   if (test) {
     neo4jDriver = createDriver('', '', '', "TEST");
   } else {
-    neo4jDriver = createDriver(DB_URL, DB_USER, DB_PASSWORD);
+    neo4jDriver = createDriver("neo4j+s://5ce8649b.databases.neo4j.io", "neo4j", "Dn4CyG5gsIYKxWY3WgG4EdceafWqRZ0wACWgfkYLQcw");
   }
 }
 
