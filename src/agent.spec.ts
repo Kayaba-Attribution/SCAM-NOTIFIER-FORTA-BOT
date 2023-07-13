@@ -293,7 +293,8 @@ describe("SCAM-NOTIFIER-BOT db logic", () => {
       const newAlert = await handleTransaction(newAlertTx);
 
       const G1_IsNotifier = await checkNotifier(neo4jDriver, G1)
-      expect(G1_IsNotifier).toBe(true);
+      // changed to false as now it added manually
+      expect(G1_IsNotifier).toBe(false);
 
       expect(newAlert).toStrictEqual([
         Finding.fromObject(
